@@ -23,7 +23,7 @@ fi
 
 d=$(date)
 echo "*******************************************************"
-echo "TEST:                   custom benc                    "
+echo "TEST:                   sysbench                       "
 echo "Current date/time:      $d"
 echo "EC2 node type:          $ec2Type"
 echo "Postgres major version: $pgVers"
