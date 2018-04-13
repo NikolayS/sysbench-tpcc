@@ -6,6 +6,7 @@ set -ueo pipefail
 set -ueox pipefail # to debug
 
 instanceIdDefined="${instanceIdDefined:-}"
+securityGroupIds="${securityGroupIds:sg-069a1372}"
 pgVers="${pgVers:-10}"
 ec2Type="${ec2Type:-m4.16xlarge}"
 ec2Price="${ec2Price:-0.035}"
