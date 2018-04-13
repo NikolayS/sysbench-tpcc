@@ -47,7 +47,7 @@ then
   cmdout=$(aws ec2 run-instances --image-id "ami-9d751ee7" --count 1 \
     --instance-type "$ec2Type"  \
     --instance-market-options "$ec2Opts" \
-    --security-group-ids "sg-069a1372" \
+    --security-group-ids "$securityGroupIds" \
     --block-device-mappings "[{\"DeviceName\": \"/dev/sda1\",\"Ebs\":{\"VolumeSize\":100}}]" \
     --key-name awskey)
 
