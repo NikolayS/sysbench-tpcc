@@ -346,6 +346,11 @@ function create_tables(drv, con, table_num)
         con:query("ALTER TABLE stock"..i.." ADD CONSTRAINT fkey_stock_1_"..table_num.." FOREIGN KEY(s_w_id) REFERENCES warehouse"..i.."(w_id)")
         con:query("ALTER TABLE stock"..i.." ADD CONSTRAINT fkey_stock_2_"..table_num.." FOREIGN KEY(s_i_id) REFERENCES item"..i.."(i_id)")
     end
+
+   if drv:name() == "pgsql"
+   then
+        con:query("vacuum analyze;")
+   end
 end
 
 
