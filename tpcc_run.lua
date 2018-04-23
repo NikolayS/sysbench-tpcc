@@ -106,12 +106,12 @@ function new_order()
                                            AND d_id = %d FOR UPDATE skip locked]]):
                                         format(table_num, w_id, d_id))
 
-	if (d_next_o_id == nil) then
+  if (d_next_o_id == nil) then
 --          print("ROLLBACK")
-          ffi.C.sb_counter_inc(sysbench.tid, ffi.C.SB_CNT_ERROR)
-          con:query("ROLLBACK")
-	  return	
-        end	
+    ffi.C.sb_counter_inc(sysbench.tid, ffi.C.SB_CNT_ERROR)
+    con:query("ROLLBACK")
+    return	
+  end	
 
 -- UPDATE district SET d_next_o_id = :d_next_o_id + 1
 --                WHERE d_id = :d_id 
@@ -187,6 +187,13 @@ function new_order()
 	                                                     WHERE s_i_id = %d AND s_w_id= %d FOR UPDATE skip locked]]):
 	                                                     format(string.format("%02d",d_id),table_num,ol_i_id,ol_supply_w_id ))
      
+	if s_quantity == nil then
+--          print("ROLLBACK")
+          ffi.C.sb_counter_inc(sysbench.tid, ffi.C.SB_CNT_ERROR)
+          con:query("ROLLBACK")
+	  return	
+        end
+
         s_quantity=tonumber(s_quantity)
   	if (s_quantity > ol_quantity) then
 	        s_quantity = s_quantity - ol_quantity
@@ -357,6 +364,13 @@ function payment()
 			     AND c_id=%d FOR UPDATE skip locked]])
 			 :format(table_num, w_id, c_d_id, c_id ))
 
+  if c_balance == nil then
+--          print("ROLLBACK")
+    ffi.C.sb_counter_inc(sysbench.tid, ffi.C.SB_CNT_ERROR)
+    con:query("ROLLBACK")
+    return	
+  end
+	
   c_balance = tonumber(c_balance) - h_amount
   c_ytd_payment = tonumber(c_ytd_payment) + h_amount
 
