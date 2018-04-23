@@ -106,7 +106,7 @@ function new_order()
                                            AND d_id = %d FOR UPDATE skip locked]]):
                                         format(table_num, w_id, d_id))
 
-	if (d_next_o_id ~= nil) then
+	if (d_next_o_id == nil) then
 --          print("ROLLBACK")
           ffi.C.sb_counter_inc(sysbench.tid, ffi.C.SB_CNT_ERROR)
           con:query("ROLLBACK")
