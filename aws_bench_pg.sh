@@ -6,15 +6,15 @@ set -ueo pipefail
 set -ueox pipefail # to debug
 
 instanceIdDefined="${instanceIdDefined:-}"
-securityGroupIds="${securityGroupIds:sg-069a1372}"
+securityGroupIds="${securityGroupIds:-sg-069a1372}"
 pgVers="${pgVers:-10}"
-ec2Type="${ec2Type:-m4.16xlarge}"
-ec2Price="${ec2Price:-0.035}"
+ec2Type="${ec2Type:-i3.xlarge}"
+ec2Price="${ec2Price:-0.115}"
 n="${n:-50}"
 s="${s:-10}"
 increment="${increment:-50}"
 duration="${duration:-30}"
-pgConfig=$(cat "config/$ec2Type")
+pgConfig=$(cat "pg_config/$ec2Type")
 
 if [ -z "$pgConfig" ]
 then
@@ -48,8 +48,8 @@ then
     --instance-type "$ec2Type"  \
     --instance-market-options "$ec2Opts" \
     --security-group-ids "$securityGroupIds" \
-    --block-device-mappings "[{\"DeviceName\": \"/dev/sda1\",\"Ebs\":{\"VolumeSize\":100}}]" \
     --key-name awskey)
+    #--block-device-mappings "[{\"DeviceName\": \"/dev/sda1\",\"Ebs\":{\"VolumeSize\":100}}]" \
 
   instanceId=$(echo $cmdout | jq -r '.Instances[0].InstanceId')
 else
@@ -57,9 +57,9 @@ else
 fi
 
 function cleanup {
-#  cmdout=$(aws ec2 terminate-instances --instance-ids "$instanceId" | jq '.TerminatingInstances[0].CurrentState.Name')
-#  echo "Finished working with instance $instanceId, termination requested, current status: $cmdout"
-  echo "Done. But the instance is alive!"
+  cmdout=$(aws ec2 terminate-instances --instance-ids "$instanceId" | jq '.TerminatingInstances[0].CurrentState.Name')
+  echo "Finished working with instance $instanceId, termination requested, current status: $cmdout"
+#  echo "Done. But the instance is alive!"
 }
 trap cleanup EXIT
 
@@ -83,7 +83,27 @@ echo "Public IP: $instanceIP"
 shopt -s expand_aliases
 alias sshdo='ssh -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP"'
 
+sshdo "sudo add-apt-repository -y ppa:sbates"
+sshdo "sudo apt-get update"
+sshdo "sudo apt-get install -y nvme-cli"
+
+define nvmePart <<CONF
+# partition table of /dev/nvme0n1
+unit: sectors
+
+/dev/nvme0n1p1 : start=     2048, size=1855466702, Id=83
+/dev/nvme0n1p2 : start=        0, size=        0, Id= 0
+/dev/nvme0n1p3 : start=        0, size=        0, Id= 0
+/dev/nvme0n1p4 : start=        0, size=        0, Id= 0
+CONF
+
+sshdo "echo \"$nvmePart\" > /tmp/nvme.part"
+sshdo "sudo sfdisk /dev/nvme0n1 < /tmp/nvme.part"
+sshdo "sudo mkfs -t ext4 /dev/nvme0n1p1"
 sshdo "sudo mkdir /postgresql && sudo ln -s /postgresql /var/lib/postgresql"
+sshdo "sudo rm -rf /var/log/postgresql"
+sshdo "sudo mkdir /postgresql/log && sudo ln -s /postgresql/log /var/log/postgresql && sudo chmod a+w /var/log/postgresql"
+sshdo "sudo mount /dev/nvme0n1p1 /postgresql"
 
 sshdo "df -h"
 
@@ -93,17 +113,34 @@ sshdo 'sudo apt-get update >/dev/null'
 sshdo "sudo apt-get install -y git libpq-dev make automake libtool pkg-config libaio-dev libmysqlclient-dev postgresql-$pgVers"
 
 sshdo "echo \"$pgConfig\" >/tmp/111 && sudo sh -c 'cat /tmp/111 >> /etc/postgresql/$pgVers/main/postgresql.conf'"
+sshdo "sudo sh -c \"echo '' > /var/log/postgresql/postgresql-$pgVers-main.log\""
 sshdo "sudo /etc/init.d/postgresql restart"
 
 sshdo "sudo -u postgres psql -c 'create database test;'"
+sshdo "sudo -u postgres psql test -c 'create extension pg_stat_statements;'"
 sshdo "sudo -u postgres psql -c \"create role sysbench superuser login password '5y5b3nch';\""
 
 sshdo "git clone https://github.com/akopytov/sysbench.git"
 sshdo "cd ~/sysbench && ./autogen.sh && ./configure --with-pgsql && make -j && sudo make install"
 sshdo "cd ~ && git clone https://github.com/NikolayS/sysbench-tpcc.git"
 sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=10 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test prepare"
+
+sshdo "sudo -u postgres psql test -c 'vacuum analyze;'"
+
+sshdo "sudo -u postgres psql test -c 'select pg_stat_reset();'"
+sshdo "sudo -u postgres psql test -c 'select pg_stat_statements_reset();'"
+sshdo "sudo sh -c \"echo '' > /var/log/postgresql/postgresql-$pgVers-main.log\""
+
 sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=56 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test --time=$duration --trx_level=RC run"
 
+sshdo "sudo -u postgres psql test -c 'create schema stats;'"
+sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_statements as select * from pg_stat_statements;'"
+sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_database as select * from pg_stat_database;'"
+sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_user_tables as select * from pg_stat_user_tables;'"
+sshdo "sudo -u postgres pg_dump test -n stats > /tmp/stats"
+scp -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP:/tmp/stats" ./stats
+sshdo "sudo gzip /var/log/postgresql/postgresql-$pgVers-main.log"
+scp -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP:/var/log/postgresql/postgresql-$pgVers-main.log.gz" ./pg.log.gz
 
 echo "The end."
 exit 0
