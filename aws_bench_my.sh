@@ -7,18 +7,17 @@ set -ueox pipefail # to debug
 
 instanceIdDefined="${instanceIdDefined:-}"
 securityGroupIds="${securityGroupIds:-sg-069a1372}"
-pgVers="${pgVers:-10}"
 ec2Type="${ec2Type:-i3.xlarge}"
 ec2Price="${ec2Price:-0.115}"
 n="${n:-50}"
 s="${s:-10}"
 increment="${increment:-50}"
 duration="${duration:-30}"
-pgConfig=$(cat "pg_config/$ec2Type")
+myConfig=$(cat "my_config/$ec2Type")
 
-if [ -z "$pgConfig" ]
+if [ -z "$myConfig" ]
 then
-  echo "ERROR: cannot find Postgres config for $ec2Type" 1>&2
+  echo "ERROR: cannot find MySQL config for $ec2Type" 1>&2
   exit 1
 fi
 
@@ -27,7 +26,7 @@ echo "*******************************************************"
 echo "TEST:                   sysbench                       "
 echo "Current date/time:      $d"
 echo "EC2 node type:          $ec2Type"
-echo "Postgres major version: $pgVers"
+echo "Percona/MySQL test"
 echo "*******************************************************"
 
 
@@ -66,9 +65,9 @@ else
 fi
 
 function cleanup {
-  cmdout=$(aws ec2 terminate-instances --instance-ids "$instanceId" | jq '.TerminatingInstances[0].CurrentState.Name')
-  echo "Finished working with instance $instanceId, termination requested, current status: $cmdout"
-#  echo "Done. But the instance is alive!"
+#  cmdout=$(aws ec2 terminate-instances --instance-ids "$instanceId" | jq '.TerminatingInstances[0].CurrentState.Name')
+#  echo "Finished working with instance $instanceId, termination requested, current status: $cmdout"
+  echo "Done. But the instance is alive!"
 }
 trap cleanup EXIT
 
@@ -94,7 +93,8 @@ echo "Public IP: $instanceIP"
 shopt -s expand_aliases
 alias sshdo='ssh -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP"'
 
-sshdo "sudo mkdir /postgresql && sudo ln -s /postgresql /var/lib/postgresql"
+sshdo "sudo mkdir /mysql"
+sshdo 'echo "$myConfig" > ~/my.cnf'
 # if it is "i3" family, attach nvme drive
 if [ ${ec2Type:0:2} == 'i3']
 then
@@ -115,39 +115,24 @@ CONF
   sshdo "echo \"$nvmePart\" > /tmp/nvme.part"
   sshdo "sudo sfdisk /dev/nvme0n1 < /tmp/nvme.part"
   sshdo "sudo mkfs -t ext4 /dev/nvme0n1p1"
-  sshdo "sudo rm -rf /var/log/postgresql"
-  sshdo "sudo mount /dev/nvme0n1p1 /postgresql"
+  sshdo "sudo mount /dev/nvme0n1p1 /mysql"
 fi
+sshdo "sudo chmod a+w /mysql"
 
 sshdo "df -h"
 
-sshdo "sudo mkdir /postgresql/log && sudo ln -s /postgresql/log /var/log/postgresql && sudo chmod a+w /var/log/postgresql"
+sshdo "sudo add-apt-repository ppa:ubuntu-toolchain-r/test"
+sshdo "sudo apt-get update"
+sshdo "sudo apt-get install -y git make automake libtool pkg-config libaio-dev libmysqlclient-dev gcc-4.9 numactl"
+sshdo "sudo apt-get upgrade -y libstdc++6"
 
-sshdo "sudo sh -c 'echo \"deb http://apt.postgresql.org/pub/repos/apt/ \`lsb_release -cs\`-pgdg main\" >> /etc/apt/sources.list.d/pgdg.list'"
-sshdo 'wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -'
-sshdo 'sudo apt-get update >/dev/null'
-sshdo "sudo apt-get install -y git libpq-dev make automake libtool pkg-config libaio-dev libmysqlclient-dev postgresql-$pgVers"
+sshdo "wget https://www.percona.com/downloads/Percona-Server-LATEST/Percona-Server-5.7.21-20/binary/tarball/Percona-Server-5.7.21-20-Linux.x86_64.ssl100.tar.gz"
+sshdo "tar xvf Percona-Server-5.7.21-20-Linux.x86_64.ssl100.tar.gz"
+sshdo "cd Percona-Server-5.7.21-20-Linux.x86_64.ssl100/"
 
-sshdo "echo \"$pgConfig\" >/tmp/111 && sudo sh -c 'cat /tmp/111 >> /etc/postgresql/$pgVers/main/postgresql.conf'"
-sshdo "sudo sh -c \"echo '' > /var/log/postgresql/postgresql-$pgVers-main.log\""
-sshdo "sudo /etc/init.d/postgresql restart"
+sshdo "numactl --interleave=all bin/mysqld --defaults-file=~/my.cnf --basedir=/home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100 --user=ubuntu --innodb_buffer_pool_size=20G"
 
-sshdo "sudo -u postgres psql -c 'create database test;'"
-sshdo "sudo -u postgres psql test -c 'create extension pg_stat_statements;'"
-sshdo "sudo -u postgres psql -c \"create role sysbench superuser login password '5y5b3nch';\""
-
-sshdo "git clone https://github.com/akopytov/sysbench.git"
-sshdo "cd ~/sysbench && ./autogen.sh && ./configure --with-pgsql && make -j && sudo make install"
-sshdo "cd ~ && git clone https://github.com/NikolayS/sysbench-tpcc.git"
-sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=10 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test prepare"
-
-sshdo "sudo -u postgres psql test -c 'vacuum analyze;'"
-
-sshdo "sudo -u postgres psql test -c 'select pg_stat_reset();'"
-sshdo "sudo -u postgres psql test -c 'select pg_stat_statements_reset();'"
-sshdo "sudo sh -c \"echo '' > /var/log/postgresql/postgresql-$pgVers-main.log\""
-
-sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=56 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test --time=$duration --trx_level=RC run"
+brr
 
 sshdo "sudo -u postgres psql test -c 'create schema stats;'"
 sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_statements as select * from pg_stat_statements;'"
