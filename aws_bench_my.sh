@@ -129,6 +129,7 @@ sshdo "sudo apt-get upgrade -y libstdc++6"
 sshdo "wget https://www.percona.com/downloads/Percona-Server-LATEST/Percona-Server-5.7.21-20/binary/tarball/Percona-Server-5.7.21-20-Linux.x86_64.ssl100.tar.gz"
 sshdo "tar xvf Percona-Server-5.7.21-20-Linux.x86_64.ssl100.tar.gz"
 sshdo "sudo ln -s /mysql /home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100/data"
+sshdo "sudo rm -rf /mysql/*"
 sshdo "sudo /home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100/bin/mysqld --no-defaults --initialize-insecure --datadir=/mysql"
 sshdo "sudo numactl --interleave=all /home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100/bin/mysqld --defaults-file=/home/ubuntu/my.cnf --basedir=/home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100 --innodb_buffer_pool_size=20G --user=root --daemonize &"
 sleep 60
