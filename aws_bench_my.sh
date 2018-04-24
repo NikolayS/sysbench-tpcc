@@ -94,7 +94,7 @@ shopt -s expand_aliases
 alias sshdo='ssh -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP"'
 
 sshdo "sudo mkdir /mysql"
-sshdo 'echo "$myConfig" > ~/my.cnf'
+sshdo "echo \"$myConfig\" > ~/my.cnf"
 # if it is "i3" family, attach nvme drive
 if [ ${ec2Type:0:2} == 'i3']
 then
@@ -128,20 +128,20 @@ sshdo "sudo apt-get upgrade -y libstdc++6"
 
 sshdo "wget https://www.percona.com/downloads/Percona-Server-LATEST/Percona-Server-5.7.21-20/binary/tarball/Percona-Server-5.7.21-20-Linux.x86_64.ssl100.tar.gz"
 sshdo "tar xvf Percona-Server-5.7.21-20-Linux.x86_64.ssl100.tar.gz"
-sshdo "cd Percona-Server-5.7.21-20-Linux.x86_64.ssl100/"
+sshdo "sudo ln -s /mysql /home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100/data"
+sshdo "sudo /home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100/bin/mysqld --no-defaults --initialize-insecure --datadir=/mysql"
+sshdo "sudo numactl --interleave=all /home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100/bin/mysqld --defaults-file=/home/ubuntu/my.cnf --basedir=/home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100 --innodb_buffer_pool_size=20G --user=root --daemonize &"
+sleep 60
+sshdo "echo \"create database test;\" | /home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100/bin/mysql  -S /tmp/mysql.sock -u root"
 
-sshdo "numactl --interleave=all bin/mysqld --defaults-file=~/my.cnf --basedir=/home/ubuntu/Percona-Server-5.7.21-20-Linux.x86_64.ssl100 --user=ubuntu --innodb_buffer_pool_size=20G"
+sshdo "curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | sudo bash"
+sshdo "sudo apt -y install sysbench"
 
-brr
+sshdo "cd ~ && git clone https://github.com/NikolayS/sysbench-tpcc.git"
 
-sshdo "sudo -u postgres psql test -c 'create schema stats;'"
-sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_statements as select * from pg_stat_statements;'"
-sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_database as select * from pg_stat_database;'"
-sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_user_tables as select * from pg_stat_user_tables;'"
-sshdo "sudo -u postgres pg_dump test -n stats > /tmp/stats"
-scp -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP:/tmp/stats" ./stats
-sshdo "sudo gzip /var/log/postgresql/postgresql-$pgVers-main.log"
-scp -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP:/var/log/postgresql/postgresql-$pgVers-main.log.gz" ./pg.log.gz
+sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=10 --report-interval=1 --tables=10 --scale=$s --mysql-socket=/tmp/mysql.sock  --db-driver=mysql  --mysql-user=root  --mysql-db=test prepare"
+
+sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=56 --report-interval=1 --tables=10 --scale=$s  --db-driver=mysql --mysql-user=root --pgsql-db=test --mysql-socket=/tmp/mysql.sock --time=$duration --trx_level=RC run"
 
 echo "The end."
 exit 0
