@@ -66,9 +66,9 @@ else
 fi
 
 function cleanup {
-  cmdout=$(aws ec2 terminate-instances --instance-ids "$instanceId" | jq '.TerminatingInstances[0].CurrentState.Name')
-  echo "Finished working with instance $instanceId, termination requested, current status: $cmdout"
-#  echo "Done. But the instance is alive!"
+#  cmdout=$(aws ec2 terminate-instances --instance-ids "$instanceId" | jq '.TerminatingInstances[0].CurrentState.Name')
+#  echo "Finished working with instance $instanceId, termination requested, current status: $cmdout"
+  echo "Done. But the instance is alive!"
 }
 trap cleanup EXIT
 
@@ -95,6 +95,7 @@ shopt -s expand_aliases
 alias sshdo='ssh -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP"'
 
 sshdo "sudo mkdir /postgresql && sudo ln -s /postgresql /var/lib/postgresql"
+#sshdo "sudo rm -rf /var/log/postgresql"
 # if it is "i3" family, attach nvme drive
 if [ ${ec2Type:0:2} == 'i3' ]
 then
@@ -103,19 +104,18 @@ then
   sshdo "sudo apt-get install -y nvme-cli"
 
   define nvmePart <<CONF
-  # partition table of /dev/nvme0n1
-  unit: sectors
+# partition table of /dev/nvme0n1
+unit: sectors
 
-  /dev/nvme0n1p1 : start=     2048, size=1855466702, Id=83
-  /dev/nvme0n1p2 : start=        0, size=        0, Id= 0
-  /dev/nvme0n1p3 : start=        0, size=        0, Id= 0
-  /dev/nvme0n1p4 : start=        0, size=        0, Id= 0
+/dev/nvme0n1p1 : start=     2048, size=1855466702, Id=83
+/dev/nvme0n1p2 : start=        0, size=        0, Id= 0
+/dev/nvme0n1p3 : start=        0, size=        0, Id= 0
+/dev/nvme0n1p4 : start=        0, size=        0, Id= 0
 CONF
 
   sshdo "echo \"$nvmePart\" > /tmp/nvme.part"
   sshdo "sudo sfdisk /dev/nvme0n1 < /tmp/nvme.part"
   sshdo "sudo mkfs -t ext4 /dev/nvme0n1p1"
-  sshdo "sudo rm -rf /var/log/postgresql"
   sshdo "sudo mount /dev/nvme0n1p1 /postgresql"
 fi
 

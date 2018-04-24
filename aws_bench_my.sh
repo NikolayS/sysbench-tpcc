@@ -103,13 +103,13 @@ then
   sshdo "sudo apt-get install -y nvme-cli"
 
   define nvmePart <<CONF
-  # partition table of /dev/nvme0n1
-  unit: sectors
+# partition table of /dev/nvme0n1
+unit: sectors
 
-  /dev/nvme0n1p1 : start=     2048, size=1855466702, Id=83
-  /dev/nvme0n1p2 : start=        0, size=        0, Id= 0
-  /dev/nvme0n1p3 : start=        0, size=        0, Id= 0
-  /dev/nvme0n1p4 : start=        0, size=        0, Id= 0
+/dev/nvme0n1p1 : start=     2048, size=1855466702, Id=83
+/dev/nvme0n1p2 : start=        0, size=        0, Id= 0
+/dev/nvme0n1p3 : start=        0, size=        0, Id= 0
+/dev/nvme0n1p4 : start=        0, size=        0, Id= 0
 CONF
 
   sshdo "echo \"$nvmePart\" > /tmp/nvme.part"
