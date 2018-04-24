@@ -96,7 +96,7 @@ alias sshdo='ssh -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$ins
 
 sshdo "sudo mkdir /postgresql && sudo ln -s /postgresql /var/lib/postgresql"
 # if it is "i3" family, attach nvme drive
-if [ ${ec2Type:0:2} == 'i3']
+if [ ${ec2Type:0:2} == 'i3' ]
 then
   sshdo "sudo add-apt-repository -y ppa:sbates"
   sshdo "sudo apt-get update"

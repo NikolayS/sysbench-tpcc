@@ -96,7 +96,7 @@ alias sshdo='ssh -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$ins
 sshdo "sudo mkdir /mysql"
 sshdo "echo \"$myConfig\" > ~/my.cnf"
 # if it is "i3" family, attach nvme drive
-if [ ${ec2Type:0:2} == 'i3']
+if [ ${ec2Type:0:2} == 'i3' ]
 then
   sshdo "sudo add-apt-repository -y ppa:sbates"
   sshdo "sudo apt-get update"
@@ -141,7 +141,7 @@ sshdo "cd ~ && git clone https://github.com/NikolayS/sysbench-tpcc.git"
 
 sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=10 --report-interval=1 --tables=10 --scale=$s --mysql-socket=/tmp/mysql.sock  --db-driver=mysql  --mysql-user=root  --mysql-db=test prepare"
 
-sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=56 --report-interval=1 --tables=10 --scale=$s  --db-driver=mysql --mysql-user=root --pgsql-db=test --mysql-socket=/tmp/mysql.sock --time=$duration --trx_level=RC run"
+sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=56 --report-interval=1 --tables=10 --scale=$s  --db-driver=mysql --mysql-user=root --mysql-db=test --mysql-socket=/tmp/mysql.sock --time=$duration --trx_level=RC run"
 
 echo "The end."
 exit 0
