@@ -142,7 +142,8 @@ sshdo "cd ~ && git clone https://github.com/NikolayS/sysbench-tpcc.git"
 sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=64 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test prepare"
 
 sshdo "sudo /etc/init.d/postgresql restart"
-sshdo "sudo -u postgres vacuumdb test -j 10 -v --analyze --full"
+sshdo "sudo -u postgres psql test -c 'reindex database test;'"
+sshdo "sudo -u postgres vacuumdb test -j 10 -v --analyze"
 
 sshdo "sudo -u postgres psql test -c 'select pg_stat_reset();'"
 sshdo "sudo -u postgres psql test -c 'select pg_stat_statements_reset();'"
