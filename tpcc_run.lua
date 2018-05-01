@@ -100,11 +100,14 @@ function new_order()
   local d_next_o_id
   local d_tax
 
-  d_next_o_id, d_tax = con:query_row(([[SELECT d_next_o_id, d_tax 
-                                          FROM district%d 
-                                         WHERE d_w_id = %d 
-                                           AND d_id = %d FOR UPDATE skip locked]]):
-                                        format(table_num, w_id, d_id))
+-- UPDATE district SET d_next_o_id = :d_next_o_id + 1
+--                WHERE d_id = :d_id 
+--                AND d_w_id = :w_id;
+
+  d_next_o_id, d_tax = con:query_row(([[UPDATE district%d
+                  SET d_next_o_id = d_next_o_id + 1
+                WHERE d_id = %d AND d_w_id= %d
+		RETURNING d_next_o_id - 1, d_tax]]):format(table_num, d_id, w_id))
 
   if (d_next_o_id == nil) then
 --          print("ROLLBACK")
@@ -112,14 +115,6 @@ function new_order()
     con:query("ROLLBACK")
     return	
   end	
-
--- UPDATE district SET d_next_o_id = :d_next_o_id + 1
---                WHERE d_id = :d_id 
---                AND d_w_id = :w_id;
-
-  con:query(([[UPDATE district%d
-                  SET d_next_o_id = %d
-                WHERE d_id = %d AND d_w_id= %d]]):format(table_num, d_next_o_id + 1, d_id, w_id))
 
 --INSERT INTO orders (o_id, o_d_id, o_w_id, o_c_id,
 --                                    o_entry_d, o_ol_cnt, o_all_local)
@@ -182,11 +177,17 @@ function new_order()
         local s_data 
         local ol_dist_info
 
-	s_quantity, s_data, ol_dist_info = con:query_row(([[SELECT s_quantity, s_data, s_dist_%s s_dist 
-	                                                      FROM stock%d  
-	                                                     WHERE s_i_id = %d AND s_w_id= %d FOR UPDATE skip locked]]):
-	                                                     format(string.format("%02d",d_id),table_num,ol_i_id,ol_supply_w_id ))
-     
+-- UPDATE stock SET s_quantity = :s_quantity
+--	WHERE s_i_id = :ol_i_id 
+--	AND s_w_id = :ol_supply_w_id;*/
+
+	s_quantity, s_data, ol_dist_info = con:query_row(([[UPDATE stock%d
+	                SET s_quantity = case when s_quantity > %s then s_quantity - %s else s_quantity - %s + 91 end
+	              WHERE s_i_id = %d 
+		        AND s_w_id= %d
+	          RETURNING s_quantity, s_data, s_dist_%s as s_dist]]):
+		    format(table_num, ol_quantity, ol_quantity, ol_quantity, ol_i_id, ol_supply_w_id, string.format("%02d",d_id)))
+   
 	if s_quantity == nil then
 --          print("ROLLBACK")
           ffi.C.sb_counter_inc(sysbench.tid, ffi.C.SB_CNT_ERROR)
@@ -195,22 +196,6 @@ function new_order()
         end
 
         s_quantity=tonumber(s_quantity)
-  	if (s_quantity > ol_quantity) then
-	        s_quantity = s_quantity - ol_quantity
-	else
-		s_quantity = s_quantity - ol_quantity + 91
-	end
-
--- UPDATE stock SET s_quantity = :s_quantity
---	WHERE s_i_id = :ol_i_id 
---	AND s_w_id = :ol_supply_w_id;*/
-
-	con:query(([[UPDATE stock%d
-	                SET s_quantity = %d
-	              WHERE s_i_id = %d 
-		        AND s_w_id= %d]]):
-		    format(table_num, s_quantity, ol_i_id, ol_supply_w_id))
-   
         i_price=tonumber(i_price)
         w_tax=tonumber(w_tax)
         d_tax=tonumber(d_tax)        
@@ -269,10 +254,6 @@ function payment()
 
   con:query("BEGIN")
 
-  con:query(([[UPDATE warehouse%d
-	          SET w_ytd = w_ytd + %d 
-	        WHERE w_id = %d]]):format(table_num, h_amount, w_id ))
-
 -- SELECT w_street_1, w_street_2, w_city, w_state, w_zip,
 --		w_name
 --		INTO :w_street_1, :w_street_2, :w_city, :w_state,
@@ -282,27 +263,22 @@ function payment()
   local w_street_1, w_street_2, w_city, w_state, w_zip, w_name
 
   w_street_1, w_street_2, w_city, w_state, w_zip, w_name =
-                          con:query_row(([[SELECT w_street_1, w_street_2, w_city, w_state, w_zip, w_name 
-                                             FROM warehouse%d  
-                                            WHERE w_id = %d]]):format(table_num, w_id))
+					  con:query_row(([[UPDATE warehouse%d
+							      SET w_ytd = w_ytd + %d 
+							    WHERE w_id = %d
+							RETURNING w_street_1, w_street_2, w_city, w_state, w_zip, w_name]]):format(table_num, h_amount, w_id ))
 
 -- UPDATE district SET d_ytd = d_ytd + :h_amount
 --		WHERE d_w_id = :w_id 
 --		AND d_id = :d_id;*/
 
-  con:query(([[UPDATE district%d 
-                 SET d_ytd = d_ytd + %d 
-               WHERE d_w_id = %d 
-                 AND d_id= %d]]):format(table_num, h_amount, w_id, d_id))
-
-
   local d_street_1,d_street_2, d_city, d_state, d_zip, d_name
 
-  d_street_1,d_street_2, d_city, d_state, d_zip, d_name = 
-                          con:query_row(([[SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name 
-                                             FROM district%d
-                                            WHERE d_w_id = %d 
-                                              AND d_id = %d]]):format(table_num, w_id, d_id ))
+  d_street_1,d_street_2, d_city, d_state, d_zip, d_name = con:query_row(([[UPDATE district%d 
+									 SET d_ytd = d_ytd + %d 
+								       WHERE d_w_id = %d 
+									 AND d_id= %d
+								   RETURNING d_street_1, d_street_2, d_city, d_state, d_zip, d_name]]):format(table_num, h_amount, w_id, d_id))
 
   if byname == 1 then
 
@@ -352,10 +328,11 @@ function payment()
 
   local c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip,
         c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since
+  local c_data
 
-  c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip,
+  c_data, c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip,
   c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since =
-	 con:query_row(([[SELECT c_first, c_middle, c_last, c_street_1,
+	 con:query_row(([[SELECT c_data, c_first, c_middle, c_last, c_street_1,
                                  c_street_2, c_city, c_state, c_zip, c_phone,
                                  c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since
 			    FROM customer%d
@@ -375,21 +352,6 @@ function payment()
   c_ytd_payment = tonumber(c_ytd_payment) + h_amount
 
   if c_credit == "BC" then
--- SELECT c_data 
---	INTO :c_data
---	FROM customer
---	WHERE c_w_id = :c_w_id 
---	AND c_d_id = :c_d_id 
--- 	AND c_id = :c_id; */
-    
-        local c_data
-        c_data = con:query_row(([[SELECT c_data
-                                    FROM customer%d
-                                   WHERE c_w_id = %d 
-                                     AND c_d_id=%d
-                                     AND c_id= %d]]):
-                                  format(table_num, w_id, c_d_id, c_id ))
-
         local c_new_data=string.sub(string.format("| %4d %2d %4d %2d %4d $%7.2f %12s %24s",
                 c_id, c_d_id, c_w_id, d_id, w_id, h_amount, os.time(), c_data), 1, 500);
 
@@ -612,23 +574,17 @@ function delivery()
 --		                WHERE o_id = :no_o_id AND o_d_id = :d_id
 --				AND o_w_id = :w_id;*/
 
-        local o_c_id
-        o_c_id = con:query_row(([[SELECT o_c_id
-                                    FROM orders%d 
-                                   WHERE o_id = %d 
-                                     AND o_d_id = %d 
-                                     AND o_w_id = %d]])
-                                  :format(table_num, no_o_id, d_id, w_id))
-
 --	 UPDATE orders SET o_carrier_id = :o_carrier_id
 --		                WHERE o_id = :no_o_id AND o_d_id = :d_id AND
 --				o_w_id = :w_id;*/
 
-        con:query(([[UPDATE orders%d 
+        local o_c_id
+        o_c_id = con:query_row(([[UPDATE orders%d 
                         SET o_carrier_id = %d
                       WHERE o_id = %d 
                         AND o_d_id = %d 
-                        AND o_w_id = %d]])
+                        AND o_w_id = %d
+                  RETURNING o_c_id]])
                       :format(table_num, o_carrier_id, no_o_id, d_id, w_id))
 
 --   UPDATE order_line
