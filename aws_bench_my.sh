@@ -140,9 +140,9 @@ sshdo "sudo apt -y install sysbench"
 
 sshdo "cd ~ && git clone https://github.com/NikolayS/sysbench-tpcc.git"
 
-sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=10 --report-interval=1 --tables=10 --scale=$s --mysql-socket=/tmp/mysql.sock  --db-driver=mysql  --mysql-user=root  --mysql-db=test prepare"
+sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=10 --report-interval=1 --tables=64 --scale=$s --mysql-socket=/tmp/mysql.sock  --db-driver=mysql  --mysql-user=root  --mysql-db=test prepare"
 
-sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=56 --report-interval=1 --tables=10 --scale=$s  --db-driver=mysql --mysql-user=root --mysql-db=test --mysql-socket=/tmp/mysql.sock --time=$duration --trx_level=RC run"
+sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=56 --report-interval=1 --tables=64 --scale=$s  --db-driver=mysql --mysql-user=root --mysql-db=test --mysql-socket=/tmp/mysql.sock --time=$duration --trx_level=RC run"
 
 echo "The end."
 exit 0

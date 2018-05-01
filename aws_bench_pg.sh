@@ -139,15 +139,16 @@ sshdo "sudo -u postgres psql -c \"create role sysbench superuser login password 
 sshdo "git clone https://github.com/akopytov/sysbench.git"
 sshdo "cd ~/sysbench && ./autogen.sh && ./configure --with-pgsql && make -j && sudo make install"
 sshdo "cd ~ && git clone https://github.com/NikolayS/sysbench-tpcc.git"
-sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=10 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test prepare"
+sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=64 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test prepare"
 
-sshdo "sudo -u postgres vacuumdb test -j 60 -v -z"
+sshdo "sudo /etc/init.d/postgresql restart"
+sshdo "sudo -u postgres vacuumdb test -j 10 -v --analyze --full"
 
 sshdo "sudo -u postgres psql test -c 'select pg_stat_reset();'"
 sshdo "sudo -u postgres psql test -c 'select pg_stat_statements_reset();'"
 sshdo "sudo sh -c \"echo '' > /var/log/postgresql/postgresql-$pgVers-main.log\""
 
-sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=56 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test --time=$duration --trx_level=RC run"
+sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=24 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test --time=$duration --trx_level=RC run"
 
 sshdo "sudo -u postgres psql test -c 'create schema stats;'"
 sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_statements as select * from pg_stat_statements;'"
