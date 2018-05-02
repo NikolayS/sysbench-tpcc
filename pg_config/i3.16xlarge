@@ -18,6 +18,8 @@ effective_io_concurrency = 200
 max_worker_processes = 64
 max_parallel_workers_per_gather = 32
 max_parallel_workers = 64
+commit_delay = 2
+wal_writer_flush_after = 64MB
 
 autovacuum_max_workers = 20
 autovacuum_vacuum_scale_factor = 0.005

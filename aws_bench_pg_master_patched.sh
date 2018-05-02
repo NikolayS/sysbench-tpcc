@@ -94,7 +94,7 @@ echo "Public IP: $instanceIP"
 shopt -s expand_aliases
 alias sshdo='ssh -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP"'
 
-sshdo "sudo mkdir /postgresql && sudo ln -s /postgresql /var/lib/postgresql"
+sshdo "sudo mkdir /postgresql && sudo ln -s /postgresql /usr/local/postgresql"
 #sshdo "sudo rm -rf /var/log/postgresql"
 # if it is "i3" family, attach nvme drive
 if [ ${ec2Type:0:2} == 'i3' ]
@@ -123,40 +123,49 @@ sshdo "df -h"
 
 sshdo "sudo mkdir /postgresql/log && sudo ln -s /postgresql/log /var/log/postgresql && sudo chmod a+w /var/log/postgresql"
 
-sshdo "sudo sh -c 'echo \"deb http://apt.postgresql.org/pub/repos/apt/ \`lsb_release -cs\`-pgdg main\" >> /etc/apt/sources.list.d/pgdg.list'"
-sshdo 'wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -'
 sshdo 'sudo apt-get update >/dev/null'
-sshdo "sudo apt-get install -y git libpq-dev make automake libtool pkg-config libaio-dev libmysqlclient-dev postgresql-$pgVers"
+sshdo "sudo apt-get install -y git libpq-dev make automake libtool pkg-config libreadline6-dev bison flex zlib1g-dev libossp-uuid-dev"
 
-sshdo "echo \"$pgConfig\" >/tmp/111 && sudo sh -c 'cat /tmp/111 >> /etc/postgresql/$pgVers/main/postgresql.conf'"
+sshdo "git clone https://github.com/postgres/postgres.git"
+sshdo "cd ~/postgres && ./configure --prefix=/var/log/postgresql"
+
+sshdo "cd ~/postgres && wget https://www.postgresql.org/message-id/attachment/56685/lwlock_v6.patch.gz && gunzip lwlock_v6.patch.gz && patch -p1 < lwlock_v6.patch"
+sshdo "cd ~/postgres && make && make install"
+sshdo "cd ~/postgres/contribs && make && make install"
+
+sshdo "/usr/local/postgresql/bin/initdb -D /usr/local/postgresql/data"
+
+sshdo "echo \"$pgConfig\" >/tmp/111 && sudo sh -c 'cat /tmp/111 >> /usr/local/postgresql/data/postgresql.conf'"
+sshdo "echo \"log_directory = '/var/log/postgresql' \" >> /usr/local/postgresql/data/postgresql.conf"
+sshdo "echo \"log_filename = 'postgresql-$pgVers-main.log' \" >> /usr/local/postgresql/data/postgresql.conf"
 sshdo "sudo sh -c \"echo '' > /var/log/postgresql/postgresql-$pgVers-main.log\""
-sshdo "sudo /etc/init.d/postgresql restart"
+sshdo "/usr/local/postgresql/bin/pg_ctl -D /usr/local/postgresql/data start"
 
-sshdo "sudo -u postgres psql -c 'create database test;'"
-sshdo "sudo -u postgres psql test -c 'create extension pg_stat_statements;'"
-sshdo "sudo -u postgres psql -c \"create role sysbench superuser login password '5y5b3nch';\""
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql -c 'create database test;'"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql test -c 'create extension pg_stat_statements;'"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql -c \"create role sysbench superuser login password '5y5b3nch';\""
 
 sshdo "git clone https://github.com/akopytov/sysbench.git"
 sshdo "cd ~/sysbench && ./autogen.sh && ./configure --with-pgsql && make -j && sudo make install"
 sshdo "cd ~ && git clone https://github.com/NikolayS/sysbench-tpcc.git"
 sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=64 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test prepare"
 
-sshdo "sudo /etc/init.d/postgresql restart"
+sshdo "/usr/local/postgresql/bin/pg_ctl -D /usr/local/postgresql/data restart"
 sleep 30
-sshdo "sudo -u postgres psql test -c 'reindex database test;'"
-sshdo "sudo -u postgres vacuumdb test -j 10 -v --analyze"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql test -c 'reindex database test;'"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/vacuumdb test -j 10 -v --analyze"
 
-sshdo "sudo -u postgres psql test -c 'select pg_stat_reset();'"
-sshdo "sudo -u postgres psql test -c 'select pg_stat_statements_reset();'"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql test -c 'select pg_stat_reset();'"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql test -c 'select pg_stat_statements_reset();'"
 sshdo "sudo sh -c \"echo '' > /var/log/postgresql/postgresql-$pgVers-main.log\""
 
 sshdo "cd ~/sysbench-tpcc && ./tpcc.lua  --threads=24 --report-interval=1 --tables=10 --scale=$s  --db-driver=pgsql --pgsql-port=5432 --pgsql-user=sysbench --pgsql-password=5y5b3nch  --pgsql-db=test --time=$duration --trx_level=RC run"
 
-sshdo "sudo -u postgres psql test -c 'create schema stats;'"
-sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_statements as select * from pg_stat_statements;'"
-sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_database as select * from pg_stat_database;'"
-sshdo "sudo -u postgres psql test -c 'create table stats.pg_stat_user_tables as select * from pg_stat_user_tables;'"
-sshdo "sudo -u postgres pg_dump test -n stats > /tmp/stats"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql test -c 'create schema stats;'"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql test -c 'create table stats.pg_stat_statements as select * from pg_stat_statements;'"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql test -c 'create table stats.pg_stat_database as select * from pg_stat_database;'"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/psql test -c 'create table stats.pg_stat_user_tables as select * from pg_stat_user_tables;'"
+sshdo "sudo -u postgres /usr/local/postgresql/bin/pg_dump test -n stats > /tmp/stats"
 scp -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP:/tmp/stats" ./stats
 sshdo "sudo gzip /var/log/postgresql/postgresql-$pgVers-main.log"
 scp -i ~/.ssh/awskey.pem -o "StrictHostKeyChecking no" "ubuntu@$instanceIP:/var/log/postgresql/postgresql-$pgVers-main.log.gz" ./pg.log.gz
